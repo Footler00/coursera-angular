@@ -1,56 +1,74 @@
 (function () {
   'use strict';
 
-  angular.module('ShoppingListCheckOff', [])
-  .controller('ToBuyController', ToBuyController)
-  .controller('AlreadyBoughtController', AlreadyBoughtController)
-  .service('ShoppingListCheckOffService', ShoppingListCheckOffService);
+  angular.module('NarrowItDownApp', [])
+  .controller('NarrowItDownController', NarrowItDownController)
+  .service('MenuSearchService', MenuSearchService)
+  .constant('ApiBasePath', "https://coursera-jhu-default-rtdb.firebaseio.com")
+  .directive('foundItems', FoundItemsDirective);
 
-  ToBuyController.$inject = ['ShoppingListCheckOffService'];
-  function ToBuyController(ShoppingListCheckOffService) {
-    var toBuy = this;
-
-    toBuy.items = ShoppingListCheckOffService.getToBuyItems();
-
-    toBuy.buyItem = function (itemIndex) {
-      ShoppingListCheckOffService.buyItem(itemIndex);
-    };
+  function FoundItemsDirective() {
+      var ddo = {
+          templateUrl: 'foundItems.html',
+          scope: {
+              items: '<',
+              onRemove: '&'
+          }
+      };
+      return ddo;
   }
 
-  AlreadyBoughtController.$inject = ['ShoppingListCheckOffService'];
-  function AlreadyBoughtController(ShoppingListCheckOffService) {
-    var alreadyBought = this;
 
-    alreadyBought.items = ShoppingListCheckOffService.getBoughtItems();
+  NarrowItDownController.$inject = ['MenuSearchService'];
+  function NarrowItDownController(MenuSearchService) {
+    var narrowCtrl = this;
+    narrowCtrl.searchTerm = '';
+    narrowCtrl.found = [];
+
+    narrowCtrl.search = function () {
+      narrowCtrl.found = [];
+      if (narrowCtrl.searchTerm.trim() != "") {
+          var promise = MenuSearchService.getMatchedMenuItems(narrowCtrl.searchTerm);
+          promise.then(function (result) {
+              narrowCtrl.found = result;
+              console.log(result);
+          })
+          .catch(function (error) {
+              console.log("Something went wrong: " + error);
+			  narrowCtrl.search = "Nothing found 2";
+          });
+      }
+    }
+
+    narrowCtrl.remove = function (index) {
+      narrowCtrl.found.splice(index, 1);
+    }
+
   }
 
-  function ShoppingListCheckOffService() {
+
+  MenuSearchService.$inject = ['$http', 'ApiBasePath'];
+  function MenuSearchService($http, ApiBasePath) {
     var service = this;
 
-    var toBuyItems = [
-      { name: "cookies", quantity: 10 },
-      { name: "soda", quantity: 5 },
-      { name: "chips", quantity: 3 },
-      { name: "chocolate", quantity: 7 },
-      { name: "milk", quantity: 2 }
-    ];
+    service.getMatchedMenuItems = function (searchTerm) {
+      var response = $http({
+        method: "GET",
+        url: (ApiBasePath + "/menu_items.json")
+      });
 
-    var boughtItems = [];
+      return response.then(function (result) {
+          var searchItems = [];
+          var data = result.data;
 
-    service.getToBuyItems = function () {
-      return toBuyItems;
-    }
-
-    service.getBoughtItems = function () {
-      return boughtItems;
-    }
-
-    service.buyItem = function (itemIndex) {
-      var item = toBuyItems[itemIndex];
-      boughtItems.push(item);
-      toBuyItems.splice(itemIndex, 1);
+          for (var category in data) {
+              searchItems.push( data[category].menu_items.filter( item => item.description.toLowerCase().includes(searchTerm.toLowerCase()) )
+              );
+          }
+          return searchItems.flat();
+      });
     };
 
   }
 
-})();
+  })();
